@@ -13,3 +13,9 @@ pydantic
 timm
 pillow
 opencv-python
+streamlit-js-eval
+firebase-admin
+redis
+librosa
+hashlib
+streamlit-webrtc
