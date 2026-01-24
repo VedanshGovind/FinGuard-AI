@@ -19,3 +19,6 @@ redis
 librosa
 hashlib
 streamlit-webrtc
+av
+pydub
+ffmpeg

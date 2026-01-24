@@ -8,6 +8,8 @@ import string
 from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
+import cv2
+import tempfile
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -19,8 +21,13 @@ st.set_page_config(
 # --- FIREBASE SETUP ---
 if not firebase_admin._apps:
     # ⚠️ Ensure 'serviceAccountKey.json' is in your project directory
-    cred = credentials.Certificate("serviceAccountKey.json")
-    firebase_admin.initialize_app(cred)
+    if os.path.exists("serviceAccountKey.json"):
+        cred = credentials.Certificate("serviceAccountKey.json")
+        firebase_admin.initialize_app(cred)
+    else:
+        # Fallback for when running from a different directory
+        cred = credentials.Certificate("app/ui/serviceAccountKey.json")
+        firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
@@ -74,6 +81,12 @@ if "logs" not in st.session_state:
     st.session_state.logs = []
 if "security_scanned" not in st.session_state:
     st.session_state.security_scanned = False
+if "recorded_frames" not in st.session_state:
+    st.session_state.recorded_frames = []
+if "is_recording" not in st.session_state:
+    st.session_state.is_recording = False
+if "recording_complete" not in st.session_state:
+    st.session_state.recording_complete = False
 
 # --- HELPER FUNCTIONS ---
 def add_log(message):
@@ -169,19 +182,20 @@ def process_analysis(uploaded_file, endpoint_url, media_type):
         except Exception as e:
             st.error(f"An error occurred: {e}")
 
+# --- STYLESHEET ---
 def load_css():
     theme = st.session_state.get("theme", "dark")
     
     if theme == "dark":
         st.markdown("""
         <style>
-        /* 1. Page Background */
+        /* 1. Page Background - DARK (Original Radial) */
         .stApp {
             background: radial-gradient(circle at 50% 10%, #1e1e2f 0%, #0e0e17 100%) !important;
             color: #ffffff !important;
         }
 
-        /* 2. Sidebar */
+        /* 2. Sidebar - DARK */
         section[data-testid="stSidebar"] {
             background-color: #0b0b12 !important;
             border-right: 1px solid #2d2d3d !important;
@@ -199,15 +213,7 @@ def load_css():
             border: 1px solid #32324d !important;
         }
 
-        /* 5. LIVE CODE BOXES */
-        div[style*="background-color: #0e1117"] {
-            background-color: #12121f !important;
-            border: 1px solid #4a4a6a !important;
-            color: #ffffff !important;
-            border-radius: 8px !important;
-        }
-
-        /* 6. SIC CODES - REMOVED BORDERS */
+        /* 5. SIC CODES */
         .stCode, .stCode > pre, code {
             background-color: transparent !important;
             border: none !important;
@@ -216,7 +222,7 @@ def load_css():
             padding: 0 !important;
         }
 
-        /* 7. Buttons */
+        /* 6. Buttons */
         div.stButton > button {
             background-color: #1c1c2e !important;
             color: #ffffff !important;
@@ -228,14 +234,33 @@ def load_css():
             border-color: #6366f1 !important;
             background-color: #252545 !important;
         }
+        
+        /* --- LIVE PAGE SPECIFIC (SOLID BACKGROUNDS) --- */
+        .session-container {
+            background: #13161c; /* Solid dark background for readability */
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            border-left: 4px solid #FF4B4B;
+        }
+        
+        .session-label {
+            color: #cccccc !important;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
 
-        /* 8. Cleanup */
+        /* 7. Cleanup */
         .login-card { background: transparent !important; border: none !important; box-shadow: none !important; }
         div[data-testid="stVerticalBlock"] > div:has(iframe[title="streamlit_js_eval.streamlit_js_eval"]) {
             display: none !important;
         }
         
-        /* File uploader fix */
         [data-testid='stFileUploaderDropzone'] {
             pointer-events: none !important;
         }
@@ -244,6 +269,18 @@ def load_css():
             cursor: pointer !important;
             position: relative;
             z-index: 10;
+        }
+        
+        .session-code-text {
+            font-family: 'Courier New', monospace;
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: 8px;
+            background: -webkit-linear-gradient(45deg, #FF4B4B, #FF914D);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255, 75, 75, 0.3);
+            margin: 0;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -263,8 +300,6 @@ def load_css():
             font-weight: bold !important;
         }
 
-        div[style*="background-color: #0e1117"] { background-color: #F0F9FF !important; border: 2px solid #3B82F6 !important; }
-        div[style*="background-color: #0e1117"] h1 { color: #1D4ED8 !important; }
         .stButton>button { background-color: #FFFFFF !important; color: #1E293B !important; border: 1px solid #CBD5E1 !important; }
         
         .login-card { background: transparent !important; border: none !important; box-shadow: none !important; }
@@ -280,6 +315,37 @@ def load_css():
             cursor: pointer !important;
             position: relative;
             z-index: 10;
+        }
+
+        /* --- LIVE PAGE SPECIFIC (LIGHT) --- */
+        .session-container {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            border-left: 4px solid #FF4B4B;
+        }
+        
+        .session-label {
+            color: #64748B !important;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .session-code-text {
+            font-family: 'Courier New', monospace;
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: 8px;
+            background: -webkit-linear-gradient(45deg, #FF4B4B, #FF914D);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -613,7 +679,7 @@ def main_app():
         nav_mode = st.selectbox("Navigation", ["Upload", "Live", "Database"], label_visibility="collapsed")
 
     # ==========================
-    #      UPLOAD UI
+    #      UPLOAD UI (ORIGINAL)
     # ==========================
     if nav_mode == "Upload":
         with st.sidebar:
@@ -662,19 +728,12 @@ def main_app():
                         process_analysis(uploaded_audio, "http://localhost:8000/analyze/audio", "Audio")
 
     # ==========================
-    #      LIVE MODE UI
+    #      LIVE MODE UI (COMPLETE)
     # ==========================
     elif nav_mode == "Live":
-        try:
-            from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-            from streamlit_js_eval import streamlit_js_eval
-            DEPENDENCIES_INSTALLED = True
-        except ImportError:
-            DEPENDENCIES_INSTALLED = False
-
         with st.sidebar:
             st.markdown("#### 🌓 System Theme")
-            if st.button("Switch to " + ("Light Mode" if st.session_state.theme == "dark" else "Dark Mode"), use_container_width=True, key="live_theme_btn"):
+            if st.button("Switch Theme", use_container_width=True, key="live_theme_btn"):
                 st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
                 st.rerun()
             st.title("🛡️ Agent Control")
@@ -683,89 +742,409 @@ def main_app():
             
             st.markdown("---")
             st.subheader("📜 System Logs")
-            log_container = st.container(height=500, border=True)
+            log_container = st.container(height=400, border=True)
             with log_container:
                 for log in reversed(st.session_state.logs):
                     if "ALERT" in log:
                         st.error(log)
-                    elif "INTEGRITY" in log or "HARDWARE" in log:
+                    elif "INTEGRITY" in log:
                         st.success(log)
                     else:
                         st.caption(log)
-            if st.button("Clear Logs"):
+            if st.button("Clear Logs", use_container_width=True):
                 st.session_state.logs = []
                 st.rerun()
 
-        st.subheader("Live Verification")
-        if not DEPENDENCIES_INSTALLED:
-            st.error("Missing dependencies. Run: pip install streamlit-webrtc streamlit-js-eval")
-        else:
-            js_data = streamlit_js_eval(
-                js_expressions="[navigator.hardwareConcurrency, navigator.webdriver, navigator.userAgent]", 
-                want_output=True, 
-                key="security_scan"
-            )
-            js_cores, js_automation, js_ua = None, None, None
+        # --- MAIN HEADER ---
+        st.markdown("""
+            <h2 style='text-align: center; margin-bottom: 30px;'>
+                <span style='border-bottom: 2px solid #FF4B4B; padding-bottom: 5px;'>Live Verification Portal</span>
+            </h2>
+        """, unsafe_allow_html=True)
 
-            if js_data:
-                js_cores, js_automation, js_ua = js_data
-                if not st.session_state.security_scanned:
-                    add_log(f"HARDWARE: CPU Cores detected: {js_cores}")
-                    if js_automation:
-                        add_log("SECURITY ALERT: Automation/Webdriver detected!")
-                    else:
-                        add_log("INTEGRITY: Native environment verified.")
-                    if js_ua:
-                        add_log(f"DEVICE: {js_ua}")
-                    st.session_state.security_scanned = True
-
-            tab_verify, tab_security = st.tabs(["🎥 Live Broadcast", "🔒 Security Status"])
-
-            with tab_verify:
-                col_cam, col_info = st.columns([2, 1])
-                with col_cam:
-                    st.markdown(f"""
-                        <div style="background-color: #0e1117; border: 2px solid #ff4b4b; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
-                            <p style="color: gray; margin-bottom: 5px; font-size: 0.9em;">SPEAK THIS CODE INTO THE CAMERA:</p>
-                            <h1 style="color: #ff4b4b; letter-spacing: 8px; font-size: 3em; margin: 0;">{st.session_state.session_code}</h1>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    RTC_CONFIG = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
-                    webrtc_ctx = webrtc_streamer(
-                        key="video-broadcast",
-                        mode=WebRtcMode.SENDRECV,
-                        rtc_configuration=RTC_CONFIG,
-                        media_stream_constraints={
-                            "video": {
-                                "width": {"ideal": 1280},
-                                "height": {"ideal": 1080},
-                                "frameRate": {"ideal": 30}
-                            },
-                            "audio": True
-                        },
+        # --- SESSION CODE SECTION ---
+        with st.container():
+            st.markdown(f"""
+                <div class="session-container">
+                    <div class="session-label">Active Session Challenge</div>
+                    <div class="session-code-text">{st.session_state.session_code}</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            col_spacer_l, col_btn, col_spacer_r = st.columns([2, 2, 2])
+            with col_btn:
+                if st.button("🔄 Generate New Code", use_container_width=True, key="reset_code_btn"):
+                    st.session_state.session_code = ''.join(
+                        random.choices(string.ascii_uppercase + string.digits, k=6)
                     )
-                with col_info:
-                    st.subheader("Session Details")
-                    st.write("Monitoring broadcast for biometric consistency.")
-                    if st.button("🔄 Regenerate Code"):
-                        st.session_state.session_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-                        add_log(f"SESSION: Code reset to {st.session_state.session_code}")
-                        st.rerun()
+                    add_log(f"SESSION: New code generated - {st.session_state.session_code}")
+                    st.rerun()
 
-            with tab_security:
-                st.subheader("Forensic Metadata")
-                if js_cores is not None:
-                    st.json({
-                        "Hardware Cores": js_cores,
-                        "Webdriver Active": js_automation,
-                        "Browser String": js_ua,
-                        "Verification Code": st.session_state.session_code
-                    })
-                else:
-                    st.warning("Synchronizing with hardware... please wait.")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # --- VIDEO RECORDER HTML (WITH AUDIO GLOW & SAFETY CHECKS) ---
+        video_recorder_html = """
+        <div class="video-wrapper">
+            <div class="video-frame">
+                <div id="recordingIndicator" class="rec-dot hidden"></div>
+                <video id="videoPreview" autoplay muted playsinline></video>
+                <div id="videoOverlay" class="overlay">
+                    <div id="statusText">Initialize Camera...</div>
+                </div>
+            </div>
+
+            <div class="controls-bar">
+                <button id="startBtn" onclick="startRecording()" class="btn-control start">
+                    <span>🔴</span> Start
+                </button>
+                <button id="stopBtn" onclick="stopRecording()" disabled class="btn-control stop">
+                    <span>⏹️</span> Verify
+                </button>
+                <button id="resetBtn" onclick="resetSession()" class="btn-control reset">
+                    <span>🔄</span> Reset
+                </button>
+            </div>
+            
+            <div id="results" class="results-area"></div>
+        </div>
+        
+        <script>
+            let mediaRecorder;
+            let recordedChunks = [];
+            let stream;
+            let recordedBlob = null;
+            let audioContext, analyser, dataArray, source;
+            let animationId;
+            let isVisualizerRunning = false;
+            
+            async function initCamera() {
+                try {
+                    // Try to get both video and audio
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 640, height: 360 }, 
+                        audio: true 
+                    });
+                    
+                    document.getElementById('videoPreview').srcObject = stream;
+                    
+                    // --- AUDIO REACTIVE SETUP (Safe Mode) ---
+                    try {
+                        setupAudioVisualizer(stream);
+                    } catch (e) {
+                        console.log("Audio visualizer failed to load (minor issue):", e);
+                    }
+                    
+                    updateStatus('✅ Camera & Mic Ready', 'ready');
+                    
+                } catch (err) {
+                    console.error("Camera Error:", err);
+                    updateStatus('❌ Camera Access Denied', 'error');
+                    document.getElementById('videoOverlay').innerHTML = '<div style="color:red; padding:20px;">Camera Access Denied.<br>Please allow permissions in your browser.</div>';
+                }
+            }
+            
+            function setupAudioVisualizer(stream) {
+                if (!window.AudioContext && !window.webkitAudioContext) return;
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 64; 
+                
+                source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                if (!isVisualizerRunning) {
+                    isVisualizerRunning = true;
+                    visualize();
+                }
+            }
+            
+            function visualize() {
+                if (!analyser) return;
+                
+                animationId = requestAnimationFrame(visualize);
+                analyser.getByteFrequencyData(dataArray);
+
+                // Calculate average volume
+                let sum = 0;
+                for(let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                let average = sum / dataArray.length;
+
+                // Map volume (0-255) to glow pixels (0-60px)
+                let glowSize = (average / 150) * 50; 
+                if (glowSize > 60) glowSize = 60;
+                
+                const videoFrame = document.querySelector('.video-frame');
+                if (videoFrame) {
+                    const isRecording = videoFrame.classList.contains('recording');
+                    
+                    if (isRecording) {
+                        // PULSING RED (Recording)
+                        videoFrame.style.boxShadow = `0 0 ${20 + glowSize}px rgba(255, 75, 75, ${0.4 + (average/255)})`;
+                        videoFrame.style.borderColor = `rgba(255, 75, 75, ${0.8 + (average/500)})`;
+                    } else {
+                        // IDLE - NO GLOW (Static)
+                        videoFrame.style.boxShadow = 'none';
+                        videoFrame.style.borderColor = "#333";
+                    }
+                }
+            }
+            
+            function updateStatus(text, type) {
+                const el = document.getElementById('statusText');
+                if(el) {
+                    el.textContent = text;
+                    if(type === 'recording') el.style.color = '#ff4b4b';
+                    else if(type === 'success') el.style.color = '#00e676';
+                    else el.style.color = 'white';
+                }
+            }
+
+            function startRecording() {
+                if (!stream) return;
+                
+                // Resume Audio Context if suspended (Browser policy)
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+
+                recordedChunks = [];
+                recordedBlob = null;
+                document.getElementById('results').innerHTML = '';
+                document.getElementById('recordingIndicator').classList.remove('hidden');
+                document.querySelector('.video-frame').classList.add('recording');
+                
+                const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+                try {
+                    mediaRecorder = new MediaRecorder(stream, options);
+                } catch (e) {
+                    // Fallback for Safari/other browsers
+                    mediaRecorder = new MediaRecorder(stream);
+                }
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) recordedChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    document.getElementById('recordingIndicator').classList.add('hidden');
+                    document.querySelector('.video-frame').classList.remove('recording');
+                    
+                    // Reset Glow
+                    const videoFrame = document.querySelector('.video-frame');
+                    if(videoFrame) {
+                        videoFrame.style.boxShadow = 'none';
+                        videoFrame.style.borderColor = '#333';
+                    }
+
+                    recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                    updateStatus('⏳ Uploading & Analyzing...', 'neutral');
+                    await uploadAndVerify(recordedBlob);
+                };
+                
+                mediaRecorder.start();
+                toggleButtons(true);
+                updateStatus('🔴 RECORDING... Speak Code: __SESSION_CODE__', 'recording');
+            }
+            
+            function stopRecording() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    toggleButtons(false);
+                }
+            }
+            
+            function toggleButtons(isRecording) {
+                document.getElementById('startBtn').disabled = isRecording;
+                document.getElementById('stopBtn').disabled = !isRecording;
+                document.getElementById('startBtn').style.opacity = isRecording ? 0.5 : 1;
+                document.getElementById('stopBtn').style.opacity = !isRecording ? 0.5 : 1;
+            }
+            
+            async function uploadAndVerify(blob) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'session-__SESSION_CODE__.webm');
+                    
+                    const response = await fetch('http://localhost:8000/analyze/live-verification', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        displayResults(result);
+                        updateStatus('✅ Verification Complete', 'success');
+                    } else {
+                        updateStatus('❌ Server Error', 'error');
+                    }
+                } catch (err) {
+                    updateStatus('❌ Connection Failed', 'error');
+                    document.getElementById('results').innerHTML = `<div style="color:#ff4b4b; text-align:center; padding:10px;">Ensure Backend is running on Port 8000</div>`;
+                }
+            }
+            
+            function displayResults(result) {
+                const scores = result.scores;
+                const video = scores.video;
+                const audio = scores.audio;
+                const isPass = result.final_verdict === 'PASS';
+                
+                let html = `
+                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; color: white;">
+                    <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
+                        <div style="font-size:0.8em; opacity:0.7">VISUAL ANALYSIS</div>
+                        <div style="font-size:1.4em; font-weight:bold">${(video.score * 100).toFixed(1)}%</div>
+                        <div style="color:${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${video.verdict}</div>
+                    </div>
+                    <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
+                        <div style="font-size:0.8em; opacity:0.7">AUDIO PATTERNS</div>
+                        <div style="font-size:1.4em; font-weight:bold">${(audio.score * 100).toFixed(1)}%</div>
+                        <div style="color:${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${audio.verdict}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top:15px; padding:15px; background:${isPass ? 'rgba(0,230,118,0.1)' : 'rgba(255,75,75,0.1)'}; border:2px solid ${isPass ? '#00e676' : '#ff4b4b'}; border-radius:12px; text-align:center;">
+                    <h2 style="margin:0; color:${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'ACCESS GRANTED' : 'ACCESS DENIED'}</h2>
+                    <p style="margin:5px 0 0 0; opacity:0.8; color: ${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'Identity Verified Successfully' : 'Security Threat Detected'}</p>
+                </div>
+                `;
+                
+                document.getElementById('results').innerHTML = html;
+                if (isPass) window.parent.postMessage({type: 'streamlit:balloons'}, '*');
+            }
+            
+            function resetSession() {
+                document.getElementById('results').innerHTML = '';
+                updateStatus('✅ Camera Ready', 'ready');
+                toggleButtons(false);
+            }
+            
+            // Start Camera
+            initCamera();
+        </script>
+
+        <style>
+            /* COMPONENT CSS */
+            :root {
+                --primary: #FF4B4B;
+                --success: #00e676;
+            }
+
+            .video-wrapper {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                font-family: 'Segoe UI', sans-serif;
+                width: 100%;
+            }
+
+            /* VIDEO FRAME STYLING */
+            .video-frame {
+                position: relative;
+                width: 100%;
+                max-width: 640px;
+                aspect-ratio: 16/9;
+                background: #000;
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                border: 1px solid #333;
+                transition: box-shadow 0.05s ease, border-color 0.1s ease;
+            }
+            
+            video {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                transform: scaleX(-1); /* Mirror effect */
+            }
+
+            /* PULSING REC DOT */
+            .rec-dot {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                width: 15px;
+                height: 15px;
+                background-color: var(--primary);
+                border-radius: 50%;
+                z-index: 10;
+                box-shadow: 0 0 0 0 rgba(255, 75, 75, 1);
+                animation: pulse-red 2s infinite;
+            }
+            .rec-dot.hidden { display: none; }
+            
+            @keyframes pulse-red {
+                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); }
+                70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); }
+                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
+            }
+
+            /* STATUS OVERLAY */
+            .overlay {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 10px;
+                background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+                color: white;
+                text-align: center;
+                font-weight: 500;
+            }
+
+            /* CONTROLS BAR */
+            .controls-bar {
+                margin-top: 20px;
+                background: #21262d;
+                padding: 8px;
+                border-radius: 50px;
+                display: flex;
+                gap: 10px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                border: 1px solid #30363d;
+            }
+
+            .btn-control {
+                border: none;
+                padding: 10px 24px;
+                border-radius: 40px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                color: white;
+            }
+            
+            .btn-control.start { background: #238636; }
+            .btn-control.start:hover { background: #2ea043; }
+            
+            .btn-control.stop { background: var(--primary); }
+            .btn-control.stop:hover { background: #ff5b5b; }
+            
+            .btn-control.reset { background: #30363d; border: 1px solid #6e7681; }
+            .btn-control.reset:hover { background: #484f58; }
+
+            .btn-control:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .btn-control span { margin-right: 8px; font-size: 1.2em; }
+        </style>
+        """.replace("__SESSION_CODE__", st.session_state.session_code)
+        
+        components.html(video_recorder_html, height=750)
 
     # ==========================
-    #      DATABASE UI (SYNCED)
+    #      DATABASE UI (ORIGINAL)
     # ==========================
     elif nav_mode == "Database":
         with st.sidebar:

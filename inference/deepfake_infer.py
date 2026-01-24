@@ -22,7 +22,14 @@ def run_inference(faces: List[np.ndarray]) -> List[float]:
         return []
 
     loader = get_model_loader()
-    model = loader.get_model()
+    
+    # --- FIX: Changed .get_model() to .get_video_model() ---
+    model = loader.get_video_model()
+    
+    if model is None:
+        print("❌ CRITICAL: Video model failed to load. Returning 0.0 scores.")
+        return [0.0] * len(faces)
+
     device = loader.get_device()
 
     # Convert to tensor: (N, C, H, W)
@@ -36,23 +43,32 @@ def run_inference(faces: List[np.ndarray]) -> List[float]:
     if settings.USE_FP16:
         face_tensor = face_tensor.half()
 
-    with torch.no_grad():
-        outputs = model(face_tensor)
+    try:
+        with torch.no_grad():
+            outputs = model(face_tensor)
 
-        # Assumption: model outputs logits or probabilities
-        if outputs.dim() > 1 and outputs.size(1) > 1:
-            probs = torch.softmax(outputs, dim=1)[:, 1]
-        else:
-            probs = torch.sigmoid(outputs).squeeze()
+            # Assumption: model outputs logits or probabilities
+            if outputs.dim() > 1 and outputs.size(1) > 1:
+                probs = torch.softmax(outputs, dim=1)[:, 1]
+            else:
+                probs = torch.sigmoid(outputs).squeeze()
+                
+            # Handle single-item batch case (squeeze might result in scalar)
+            if probs.ndim == 0:
+                predictions = [float(probs.item())]
+            else:
+                predictions = probs.detach().cpu().numpy().tolist()
 
-    predictions = probs.detach().cpu().numpy().tolist()
+        log_event(
+            "INFERENCE_COMPLETE",
+            {
+                "faces_processed": len(faces),
+                "avg_score": float(np.mean(predictions)) if predictions else 0.0
+            }
+        )
 
-    log_event(
-        "INFERENCE_COMPLETE",
-        {
-            "faces_processed": len(faces),
-            "avg_score": float(np.mean(predictions))
-        }
-    )
+        return predictions
 
-    return predictions
+    except Exception as e:
+        print(f"❌ Inference Runtime Error: {e}")
+        return [0.0] * len(faces)
