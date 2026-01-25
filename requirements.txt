@@ -22,3 +22,7 @@ streamlit-webrtc
 av
 pydub
 ffmpeg
+SpeechRecognition
+moviepy==1.0.3
+soundfile
+ffmpeg-python

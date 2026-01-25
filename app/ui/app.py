@@ -182,20 +182,19 @@ def process_analysis(uploaded_file, endpoint_url, media_type):
         except Exception as e:
             st.error(f"An error occurred: {e}")
 
-# --- STYLESHEET ---
 def load_css():
     theme = st.session_state.get("theme", "dark")
     
     if theme == "dark":
         st.markdown("""
         <style>
-        /* 1. Page Background - DARK (Original Radial) */
+        /* 1. Page Background */
         .stApp {
             background: radial-gradient(circle at 50% 10%, #1e1e2f 0%, #0e0e17 100%) !important;
             color: #ffffff !important;
         }
 
-        /* 2. Sidebar - DARK */
+        /* 2. Sidebar */
         section[data-testid="stSidebar"] {
             background-color: #0b0b12 !important;
             border-right: 1px solid #2d2d3d !important;
@@ -213,7 +212,15 @@ def load_css():
             border: 1px solid #32324d !important;
         }
 
-        /* 5. SIC CODES */
+        /* 5. LIVE CODE BOXES */
+        div[style*="background-color: #0e1117"] {
+            background-color: #12121f !important;
+            border: 1px solid #4a4a6a !important;
+            color: #ffffff !important;
+            border-radius: 8px !important;
+        }
+
+        /* 6. SIC CODES - REMOVED BORDERS */
         .stCode, .stCode > pre, code {
             background-color: transparent !important;
             border: none !important;
@@ -222,7 +229,7 @@ def load_css():
             padding: 0 !important;
         }
 
-        /* 6. Buttons */
+        /* 7. Buttons */
         div.stButton > button {
             background-color: #1c1c2e !important;
             color: #ffffff !important;
@@ -234,33 +241,14 @@ def load_css():
             border-color: #6366f1 !important;
             background-color: #252545 !important;
         }
-        
-        /* --- LIVE PAGE SPECIFIC (SOLID BACKGROUNDS) --- */
-        .session-container {
-            background: #13161c; /* Solid dark background for readability */
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-            margin-bottom: 20px;
-            border-left: 4px solid #FF4B4B;
-        }
-        
-        .session-label {
-            color: #cccccc !important;
-            font-size: 0.85rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
 
-        /* 7. Cleanup */
+        /* 8. Cleanup */
         .login-card { background: transparent !important; border: none !important; box-shadow: none !important; }
         div[data-testid="stVerticalBlock"] > div:has(iframe[title="streamlit_js_eval.streamlit_js_eval"]) {
             display: none !important;
         }
         
+        /* File uploader fix */
         [data-testid='stFileUploaderDropzone'] {
             pointer-events: none !important;
         }
@@ -269,18 +257,6 @@ def load_css():
             cursor: pointer !important;
             position: relative;
             z-index: 10;
-        }
-        
-        .session-code-text {
-            font-family: 'Courier New', monospace;
-            font-size: 3.5rem;
-            font-weight: 800;
-            letter-spacing: 8px;
-            background: -webkit-linear-gradient(45deg, #FF4B4B, #FF914D);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(255, 75, 75, 0.3);
-            margin: 0;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -300,6 +276,8 @@ def load_css():
             font-weight: bold !important;
         }
 
+        div[style*="background-color: #0e1117"] { background-color: #F0F9FF !important; border: 2px solid #3B82F6 !important; }
+        div[style*="background-color: #0e1117"] h1 { color: #1D4ED8 !important; }
         .stButton>button { background-color: #FFFFFF !important; color: #1E293B !important; border: 1px solid #CBD5E1 !important; }
         
         .login-card { background: transparent !important; border: none !important; box-shadow: none !important; }
@@ -315,37 +293,6 @@ def load_css():
             cursor: pointer !important;
             position: relative;
             z-index: 10;
-        }
-
-        /* --- LIVE PAGE SPECIFIC (LIGHT) --- */
-        .session-container {
-            background: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            margin-bottom: 20px;
-            border-left: 4px solid #FF4B4B;
-        }
-        
-        .session-label {
-            color: #64748B !important;
-            font-size: 0.85rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        
-        .session-code-text {
-            font-family: 'Courier New', monospace;
-            font-size: 3.5rem;
-            font-weight: 800;
-            letter-spacing: 8px;
-            background: -webkit-linear-gradient(45deg, #FF4B4B, #FF914D);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin: 0;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -679,7 +626,7 @@ def main_app():
         nav_mode = st.selectbox("Navigation", ["Upload", "Live", "Database"], label_visibility="collapsed")
 
     # ==========================
-    #      UPLOAD UI (ORIGINAL)
+    #      UPLOAD UI
     # ==========================
     if nav_mode == "Upload":
         with st.sidebar:
@@ -728,12 +675,13 @@ def main_app():
                         process_analysis(uploaded_audio, "http://localhost:8000/analyze/audio", "Audio")
 
     # ==========================
-    #      LIVE MODE UI (COMPLETE)
+    #      LIVE MODE UI
     # ==========================
     elif nav_mode == "Live":
         with st.sidebar:
             st.markdown("#### 🌓 System Theme")
-            if st.button("Switch Theme", use_container_width=True, key="live_theme_btn"):
+            if st.button("Switch to " + ("Light Mode" if st.session_state.theme == "dark" else "Dark Mode"), 
+                         use_container_width=True, key="live_theme_btn"):
                 st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
                 st.rerun()
             st.title("🛡️ Agent Control")
@@ -742,409 +690,271 @@ def main_app():
             
             st.markdown("---")
             st.subheader("📜 System Logs")
-            log_container = st.container(height=400, border=True)
+            log_container = st.container(height=500, border=True)
             with log_container:
                 for log in reversed(st.session_state.logs):
                     if "ALERT" in log:
                         st.error(log)
-                    elif "INTEGRITY" in log:
+                    elif "INTEGRITY" in log or "HARDWARE" in log:
                         st.success(log)
                     else:
                         st.caption(log)
-            if st.button("Clear Logs", use_container_width=True):
+            if st.button("Clear Logs"):
                 st.session_state.logs = []
                 st.rerun()
 
-        # --- MAIN HEADER ---
-        st.markdown("""
-            <h2 style='text-align: center; margin-bottom: 30px;'>
-                <span style='border-bottom: 2px solid #FF4B4B; padding-bottom: 5px;'>Live Verification Portal</span>
-            </h2>
-        """, unsafe_allow_html=True)
+        st.subheader("Live Verification System")
 
-        # --- SESSION CODE SECTION ---
-        with st.container():
+        # Display session code with reset button - INLINE
+        col_code, col_reset = st.columns([4, 1])
+        
+        with col_code:
             st.markdown(f"""
-                <div class="session-container">
-                    <div class="session-label">Active Session Challenge</div>
-                    <div class="session-code-text">{st.session_state.session_code}</div>
+                <div style="background-color: #0e1117; border: 2px solid #ff4b4b; padding: 10px; 
+                            border-radius: 8px; text-align: center; margin-bottom: 15px;">
+                    <p style="color: gray; margin-bottom: 3px; font-size: 0.8em;">SPEAK THIS CODE:</p>
+                    <h1 style="color: #ff4b4b; letter-spacing: 6px; font-size: 2em; margin: 5px 0;">
+                        {st.session_state.session_code}
+                    </h1>
                 </div>
             """, unsafe_allow_html=True)
-            
-            col_spacer_l, col_btn, col_spacer_r = st.columns([2, 2, 2])
-            with col_btn:
-                if st.button("🔄 Generate New Code", use_container_width=True, key="reset_code_btn"):
-                    st.session_state.session_code = ''.join(
-                        random.choices(string.ascii_uppercase + string.digits, k=6)
-                    )
-                    add_log(f"SESSION: New code generated - {st.session_state.session_code}")
-                    st.rerun()
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # --- VIDEO RECORDER HTML (WITH AUDIO GLOW & SAFETY CHECKS) ---
-        video_recorder_html = """
-        <div class="video-wrapper">
-            <div class="video-frame">
-                <div id="recordingIndicator" class="rec-dot hidden"></div>
-                <video id="videoPreview" autoplay muted playsinline></video>
-                <div id="videoOverlay" class="overlay">
-                    <div id="statusText">Initialize Camera...</div>
-                </div>
-            </div>
-
-            <div class="controls-bar">
-                <button id="startBtn" onclick="startRecording()" class="btn-control start">
-                    <span>🔴</span> Start
-                </button>
-                <button id="stopBtn" onclick="stopRecording()" disabled class="btn-control stop">
-                    <span>⏹️</span> Verify
-                </button>
-                <button id="resetBtn" onclick="resetSession()" class="btn-control reset">
-                    <span>🔄</span> Reset
-                </button>
-            </div>
-            
-            <div id="results" class="results-area"></div>
-        </div>
         
-        <script>
+        with col_reset:
+            if st.button("🔄 New Code", use_container_width=True, key="reset_code_btn"):
+                st.session_state.session_code = ''.join(
+                    random.choices(string.ascii_uppercase + string.digits, k=6)
+                )
+                add_log(f"SESSION: New code generated - {st.session_state.session_code}")
+                st.rerun()
+
+        # HTML/JS for video recording with auto-upload - INCREASED HEIGHT
+        video_recorder_html = f"""
+        <div style="text-align: center;">
+            <video id="videoPreview" autoplay muted playsinline 
+                   style="width: 100%; max-width: 640px; height: 360px; border: 2px solid #ff4b4b; border-radius: 8px; background: #000; object-fit: cover;">
+            </video>
+            <br>
+            <div style="margin: 10px 0;">
+                <button id="startBtn" onclick="startRecording()" 
+                        style="padding: 10px 20px; font-size: 14px; margin: 3px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                    🔴 Start Recording
+                </button>
+                <button id="stopBtn" onclick="stopRecording()" disabled
+                        style="padding: 10px 20px; font-size: 14px; margin: 3px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                    ⏹️ Stop & Verify
+                </button>
+                <button id="resetBtn" onclick="resetSession()"
+                        style="padding: 10px 20px; font-size: 14px; margin: 3px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                    🔄 Reset
+                </button>
+            </div>
+            <p id="status" style="margin: 8px 0; font-size: 13px; color: #aaa; min-height: 20px;"></p>
+            <div id="results" style="margin-top: 15px; padding-bottom: 20px;"></div>
+            
+            <script>
             let mediaRecorder;
             let recordedChunks = [];
             let stream;
             let recordedBlob = null;
-            let audioContext, analyser, dataArray, source;
-            let animationId;
-            let isVisualizerRunning = false;
             
-            async function initCamera() {
-                try {
-                    // Try to get both video and audio
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 640, height: 360 }, 
-                        audio: true 
-                    });
+            async function initCamera() {{
+                try {{
+                    stream = await navigator.mediaDevices.getUserMedia({{ 
+                        video: {{ width: 640, height: 360 }}, 
+                        audio: {{
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            sampleRate: 16000
+                        }}
+                    }});
                     
                     document.getElementById('videoPreview').srcObject = stream;
                     
-                    // --- AUDIO REACTIVE SETUP (Safe Mode) ---
-                    try {
-                        setupAudioVisualizer(stream);
-                    } catch (e) {
-                        console.log("Audio visualizer failed to load (minor issue):", e);
-                    }
-                    
-                    updateStatus('✅ Camera & Mic Ready', 'ready');
-                    
-                } catch (err) {
-                    console.error("Camera Error:", err);
-                    updateStatus('❌ Camera Access Denied', 'error');
-                    document.getElementById('videoOverlay').innerHTML = '<div style="color:red; padding:20px;">Camera Access Denied.<br>Please allow permissions in your browser.</div>';
-                }
-            }
+                    // Check if audio track exists
+                    const audioTracks = stream.getAudioTracks();
+                    if (audioTracks.length > 0) {{
+                        console.log('Audio track available:', audioTracks[0].label);
+                        document.getElementById('status').textContent = '✅ Camera & Microphone Ready';
+                    }} else {{
+                        console.warn('No audio track found');
+                        document.getElementById('status').textContent = '⚠️ Camera ready but NO MICROPHONE detected';
+                    }}
+                    document.getElementById('status').style.color = '#28a745';
+                }} catch (err) {{
+                    document.getElementById('status').textContent = '❌ Camera/Mic access denied: ' + err.message;
+                    document.getElementById('status').style.color = '#dc3545';
+                }}
+            }}
             
-            function setupAudioVisualizer(stream) {
-                if (!window.AudioContext && !window.webkitAudioContext) return;
-                
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 64; 
-                
-                source = audioContext.createMediaStreamSource(stream);
-                source.connect(analyser);
-                
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
-                if (!isVisualizerRunning) {
-                    isVisualizerRunning = true;
-                    visualize();
-                }
-            }
-            
-            function visualize() {
-                if (!analyser) return;
-                
-                animationId = requestAnimationFrame(visualize);
-                analyser.getByteFrequencyData(dataArray);
-
-                // Calculate average volume
-                let sum = 0;
-                for(let i = 0; i < dataArray.length; i++) {
-                    sum += dataArray[i];
-                }
-                let average = sum / dataArray.length;
-
-                // Map volume (0-255) to glow pixels (0-60px)
-                let glowSize = (average / 150) * 50; 
-                if (glowSize > 60) glowSize = 60;
-                
-                const videoFrame = document.querySelector('.video-frame');
-                if (videoFrame) {
-                    const isRecording = videoFrame.classList.contains('recording');
-                    
-                    if (isRecording) {
-                        // PULSING RED (Recording)
-                        videoFrame.style.boxShadow = `0 0 ${20 + glowSize}px rgba(255, 75, 75, ${0.4 + (average/255)})`;
-                        videoFrame.style.borderColor = `rgba(255, 75, 75, ${0.8 + (average/500)})`;
-                    } else {
-                        // IDLE - NO GLOW (Static)
-                        videoFrame.style.boxShadow = 'none';
-                        videoFrame.style.borderColor = "#333";
-                    }
-                }
-            }
-            
-            function updateStatus(text, type) {
-                const el = document.getElementById('statusText');
-                if(el) {
-                    el.textContent = text;
-                    if(type === 'recording') el.style.color = '#ff4b4b';
-                    else if(type === 'success') el.style.color = '#00e676';
-                    else el.style.color = 'white';
-                }
-            }
-
-            function startRecording() {
-                if (!stream) return;
-                
-                // Resume Audio Context if suspended (Browser policy)
-                if (audioContext && audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
-
+            function startRecording() {{
                 recordedChunks = [];
                 recordedBlob = null;
                 document.getElementById('results').innerHTML = '';
-                document.getElementById('recordingIndicator').classList.remove('hidden');
-                document.querySelector('.video-frame').classList.add('recording');
                 
-                const options = { mimeType: 'video/webm;codecs=vp9,opus' };
-                try {
-                    mediaRecorder = new MediaRecorder(stream, options);
-                } catch (e) {
-                    // Fallback for Safari/other browsers
-                    mediaRecorder = new MediaRecorder(stream);
-                }
+                const options = {{ mimeType: 'video/webm;codecs=vp9,opus' }};
                 
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) recordedChunks.push(event.data);
-                };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {{
+                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                }}
                 
-                mediaRecorder.onstop = async () => {
-                    document.getElementById('recordingIndicator').classList.add('hidden');
-                    document.querySelector('.video-frame').classList.remove('recording');
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {{
+                    options.mimeType = 'video/webm';
+                }}
+                
+                mediaRecorder = new MediaRecorder(stream, options);
+                
+                mediaRecorder.ondataavailable = (event) => {{
+                    if (event.data.size > 0) {{
+                        recordedChunks.push(event.data);
+                    }}
+                }};
+                
+                mediaRecorder.onstop = async () => {{
+                    recordedBlob = new Blob(recordedChunks, {{ type: 'video/webm' }});
+                    document.getElementById('status').textContent = '⏳ Uploading...';
+                    document.getElementById('status').style.color = '#ffc107';
                     
-                    // Reset Glow
-                    const videoFrame = document.querySelector('.video-frame');
-                    if(videoFrame) {
-                        videoFrame.style.boxShadow = 'none';
-                        videoFrame.style.borderColor = '#333';
-                    }
-
-                    recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    updateStatus('⏳ Uploading & Analyzing...', 'neutral');
                     await uploadAndVerify(recordedBlob);
-                };
+                }};
                 
                 mediaRecorder.start();
-                toggleButtons(true);
-                updateStatus('🔴 RECORDING... Speak Code: __SESSION_CODE__', 'recording');
-            }
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('status').textContent = '🔴 RECORDING... Speak: {st.session_state.session_code}';
+                document.getElementById('status').style.color = '#dc3545';
+            }}
             
-            function stopRecording() {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            function stopRecording() {{
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {{
                     mediaRecorder.stop();
-                    toggleButtons(false);
-                }
-            }
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                }}
+            }}
             
-            function toggleButtons(isRecording) {
-                document.getElementById('startBtn').disabled = isRecording;
-                document.getElementById('stopBtn').disabled = !isRecording;
-                document.getElementById('startBtn').style.opacity = isRecording ? 0.5 : 1;
-                document.getElementById('stopBtn').style.opacity = !isRecording ? 0.5 : 1;
-            }
-            
-            async function uploadAndVerify(blob) {
-                try {
+            async function uploadAndVerify(blob) {{
+                try {{
                     const formData = new FormData();
-                    formData.append('file', blob, 'session-__SESSION_CODE__.webm');
+                    formData.append('file', blob, 'session-{st.session_state.session_code}.webm');
                     
-                    const response = await fetch('http://localhost:8000/analyze/live-verification', {
+                    const response = await fetch('http://localhost:8000/analyze/live-verification', {{
                         method: 'POST',
                         body: formData
-                    });
+                    }});
                     
-                    if (response.ok) {
+                    if (response.ok) {{
                         const result = await response.json();
                         displayResults(result);
-                        updateStatus('✅ Verification Complete', 'success');
-                    } else {
-                        updateStatus('❌ Server Error', 'error');
-                    }
-                } catch (err) {
-                    updateStatus('❌ Connection Failed', 'error');
-                    document.getElementById('results').innerHTML = `<div style="color:#ff4b4b; text-align:center; padding:10px;">Ensure Backend is running on Port 8000</div>`;
-                }
-            }
+                    }} else {{
+                        const errorText = await response.text();
+                        document.getElementById('status').textContent = '❌ Error: ' + errorText;
+                        document.getElementById('status').style.color = '#dc3545';
+                    }}
+                }} catch (err) {{
+                    document.getElementById('status').textContent = '❌ Connection Failed';
+                    document.getElementById('status').style.color = '#dc3545';
+                    document.getElementById('results').innerHTML = `
+                        <div style="padding: 12px; background: #dc354522; border: 2px solid #dc3545; border-radius: 6px; margin-top: 10px;">
+                            <p style="color: #dc3545; margin: 0; font-size: 13px;">⚠️ Backend not running: python app/main.py</p>
+                        </div>
+                    `;
+                }}
+            }}
             
-            function displayResults(result) {
+            function displayResults(result) {{
                 const scores = result.scores;
                 const video = scores.video;
                 const audio = scores.audio;
-                const isPass = result.final_verdict === 'PASS';
+                const code = scores.code;
                 
-                let html = `
-                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; color: white;">
-                    <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
-                        <div style="font-size:0.8em; opacity:0.7">VISUAL ANALYSIS</div>
-                        <div style="font-size:1.4em; font-weight:bold">${(video.score * 100).toFixed(1)}%</div>
-                        <div style="color:${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${video.verdict}</div>
-                    </div>
-                    <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
-                        <div style="font-size:0.8em; opacity:0.7">AUDIO PATTERNS</div>
-                        <div style="font-size:1.4em; font-weight:bold">${(audio.score * 100).toFixed(1)}%</div>
-                        <div style="color:${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${audio.verdict}</div>
-                    </div>
-                </div>
+                let html = '<div style="text-align: left; max-width: 700px; margin: 10px auto; padding: 15px; background: #1a1a2e; border-radius: 8px;">';
+                html += '<h3 style="color: #fff; margin: 0 0 12px 0; font-size: 1.3em;">📊 Verification Results</h3>';
+                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">';
                 
-                <div style="margin-top:15px; padding:15px; background:${isPass ? 'rgba(0,230,118,0.1)' : 'rgba(255,75,75,0.1)'}; border:2px solid ${isPass ? '#00e676' : '#ff4b4b'}; border-radius:12px; text-align:center;">
-                    <h2 style="margin:0; color:${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'ACCESS GRANTED' : 'ACCESS DENIED'}</h2>
-                    <p style="margin:5px 0 0 0; opacity:0.8; color: ${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'Identity Verified Successfully' : 'Security Threat Detected'}</p>
-                </div>
-                `;
+                // Video Results
+                html += '<div style="padding: 12px; background: #0f3460; border-radius: 6px;">';
+                html += '<h4 style="color: #fff; margin: 0 0 5px 0; font-size: 1em;">🎥 Visual</h4>';
+                html += '<p style="color: #aaa; margin: 0; font-size: 0.8em;">' + video.model + '</p>';
+                html += '<p style="font-size: 26px; color: ' + (video.verdict === 'REAL' ? '#28a745' : '#dc3545') + '; margin: 8px 0; font-weight: bold;">';
+                html += (video.score * 100).toFixed(1) + '%</p>';
+                html += '<p style="color: ' + (video.verdict === 'REAL' ? '#28a745' : '#dc3545') + '; font-weight: bold; margin: 0; font-size: 0.9em;">';
+                html += video.verdict === 'REAL' ? '✅ AUTHENTIC' : '❌ FAKE';
+                html += '</p></div>';
+                
+                // Audio Results
+                html += '<div style="padding: 12px; background: #0f3460; border-radius: 6px;">';
+                html += '<h4 style="color: #fff; margin: 0 0 5px 0; font-size: 1em;">🎙️ Audio</h4>';
+                html += '<p style="color: #aaa; margin: 0; font-size: 0.8em;">' + audio.model + '</p>';
+                html += '<p style="font-size: 26px; color: ' + (audio.verdict === 'REAL' ? '#28a745' : '#dc3545') + '; margin: 8px 0; font-weight: bold;">';
+                html += (audio.score * 100).toFixed(1) + '%</p>';
+                html += '<p style="color: ' + (audio.verdict === 'REAL' ? '#28a745' : '#dc3545') + '; font-weight: bold; margin: 0; font-size: 0.9em;">';
+                html += audio.verdict === 'REAL' ? '✅ AUTHENTIC' : '❌ FAKE';
+                html += '</p></div>';
+                
+                html += '</div>';
+                
+                // Code Verification Result
+                if (code && code.code_match !== null && code.code_match !== undefined) {{
+                    const codeColor = code.code_match ? '#28a745' : '#dc3545';
+                    const codeBg = code.code_match ? '#28a74522' : '#dc354522';
+                    html += '<div style="padding: 12px; background: ' + codeBg + '; border: 2px solid ' + codeColor + '; border-radius: 6px; margin-bottom: 12px;">';
+                    html += '<h4 style="color: ' + codeColor + '; margin: 0 0 5px 0; font-size: 1em;">🗣️ Code Verification</h4>';
+                    html += '<p style="color: #fff; margin: 0; font-size: 0.85em;">Spoken: "' + (code.spoken_text || 'Not detected') + '"</p>';
+                    html += '<p style="color: ' + codeColor + '; font-weight: bold; margin: 5px 0 0 0; font-size: 0.9em;">';
+                    html += code.code_match ? '✅ CODE MATCHED (' + (code.confidence * 100).toFixed(0) + '%)' : '❌ CODE MISMATCH';
+                    html += '</p></div>';
+                }} else if (code && code.error) {{
+                    // Show warning if code verification failed due to technical issues
+                    html += '<div style="padding: 12px; background: #ffc10722; border: 2px solid #ffc107; border-radius: 6px; margin-bottom: 12px;">';
+                    html += '<h4 style="color: #ffc107; margin: 0 0 5px 0; font-size: 1em;">🗣️ Code Verification</h4>';
+                    html += '<p style="color: #fff; margin: 0; font-size: 0.85em;">⚠️ ' + (code.spoken_text || 'Audio issues') + '</p>';
+                    html += '<p style="color: #ffc107; font-weight: bold; margin: 5px 0 0 0; font-size: 0.85em;">Verification skipped (proceeded with video + audio only)</p>';
+                    html += '</div>';
+                }}
+                
+                // Final Verdict
+                const finalColor = result.final_verdict === 'PASS' ? '#28a745' : '#dc3545';
+                const finalBg = result.final_verdict === 'PASS' ? '#28a74522' : '#dc354522';
+                html += '<div style="padding: 15px; background: ' + finalBg + '; border: 2px solid ' + finalColor + '; border-radius: 6px; text-align: center; margin-bottom: 10px;">';
+                html += '<h3 style="color: ' + finalColor + '; margin: 0 0 5px 0; font-size: 1.3em; line-height: 1.4;">';
+                html += result.final_verdict === 'PASS' ? '✅ SESSION VERIFIED' : '❌ SESSION REJECTED';
+                html += '</h3>';
+                
+                let subtitle = result.final_verdict === 'PASS' ? 'User is Authenticated' : 'Authentication Failed';
+                if (result.failure_reason) {{
+                    subtitle = result.failure_reason;
+                }}
+                html += '<p style="color: #fff; margin: 0; font-size: 0.9em;">' + subtitle + '</p>';
+                html += '</div></div>';
                 
                 document.getElementById('results').innerHTML = html;
-                if (isPass) window.parent.postMessage({type: 'streamlit:balloons'}, '*');
-            }
+                document.getElementById('status').textContent = '✅ Complete!';
+                document.getElementById('status').style.color = '#28a745';
+                
+                if (result.final_verdict === 'PASS') {{
+                    window.parent.postMessage({{type: 'streamlit:balloons'}}, '*');
+                }}
+            }}
             
-            function resetSession() {
+            function resetSession() {{
                 document.getElementById('results').innerHTML = '';
-                updateStatus('✅ Camera Ready', 'ready');
-                toggleButtons(false);
-            }
+                document.getElementById('status').textContent = '✅ Camera Ready';
+                document.getElementById('status').style.color = '#28a745';
+                recordedChunks = [];
+                recordedBlob = null;
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }}
             
-            // Start Camera
             initCamera();
-        </script>
-
-        <style>
-            /* COMPONENT CSS */
-            :root {
-                --primary: #FF4B4B;
-                --success: #00e676;
-            }
-
-            .video-wrapper {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                font-family: 'Segoe UI', sans-serif;
-                width: 100%;
-            }
-
-            /* VIDEO FRAME STYLING */
-            .video-frame {
-                position: relative;
-                width: 100%;
-                max-width: 640px;
-                aspect-ratio: 16/9;
-                background: #000;
-                border-radius: 16px;
-                overflow: hidden;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                border: 1px solid #333;
-                transition: box-shadow 0.05s ease, border-color 0.1s ease;
-            }
-            
-            video {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                transform: scaleX(-1); /* Mirror effect */
-            }
-
-            /* PULSING REC DOT */
-            .rec-dot {
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                width: 15px;
-                height: 15px;
-                background-color: var(--primary);
-                border-radius: 50%;
-                z-index: 10;
-                box-shadow: 0 0 0 0 rgba(255, 75, 75, 1);
-                animation: pulse-red 2s infinite;
-            }
-            .rec-dot.hidden { display: none; }
-            
-            @keyframes pulse-red {
-                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); }
-                70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); }
-                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
-            }
-
-            /* STATUS OVERLAY */
-            .overlay {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                padding: 10px;
-                background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-                color: white;
-                text-align: center;
-                font-weight: 500;
-            }
-
-            /* CONTROLS BAR */
-            .controls-bar {
-                margin-top: 20px;
-                background: #21262d;
-                padding: 8px;
-                border-radius: 50px;
-                display: flex;
-                gap: 10px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                border: 1px solid #30363d;
-            }
-
-            .btn-control {
-                border: none;
-                padding: 10px 24px;
-                border-radius: 40px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s;
-                display: flex;
-                align-items: center;
-                color: white;
-            }
-            
-            .btn-control.start { background: #238636; }
-            .btn-control.start:hover { background: #2ea043; }
-            
-            .btn-control.stop { background: var(--primary); }
-            .btn-control.stop:hover { background: #ff5b5b; }
-            
-            .btn-control.reset { background: #30363d; border: 1px solid #6e7681; }
-            .btn-control.reset:hover { background: #484f58; }
-
-            .btn-control:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-
-            .btn-control span { margin-right: 8px; font-size: 1.2em; }
-        </style>
-        """.replace("__SESSION_CODE__", st.session_state.session_code)
+            </script>
+        </div>
+        """
         
-        components.html(video_recorder_html, height=750)
+        components.html(video_recorder_html, height=950)
 
     # ==========================
-    #      DATABASE UI (ORIGINAL)
+    #      DATABASE UI (SYNCED)
     # ==========================
     elif nav_mode == "Database":
         with st.sidebar:
