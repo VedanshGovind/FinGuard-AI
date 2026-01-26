@@ -10,6 +10,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import cv2
 import tempfile
+import json # Added for Integrity Check parsing
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -1048,6 +1049,14 @@ def main_app():
     #      LIVE MODE UI (Combined)
     # ==========================
     elif nav_mode == "Live":
+        # --- INTEGRITY CHECK DEPENDENCIES ---
+        try:
+            from streamlit_js_eval import streamlit_js_eval
+            import json 
+            DEPENDENCIES_INSTALLED = True
+        except ImportError:
+            DEPENDENCIES_INSTALLED = False
+
         with st.sidebar:
             st.markdown("#### 🌓 System Theme")
             if st.button("Switch Theme", use_container_width=True, key="live_theme_btn"):
@@ -1062,10 +1071,14 @@ def main_app():
             log_container = st.container(height=400, border=True)
             with log_container:
                 for log in reversed(st.session_state.logs):
-                    if "ALERT" in log:
+                    if "ALERT" in log or "SPOOF" in log:
                         st.error(log)
                     elif "INTEGRITY" in log:
                         st.success(log)
+                    elif "VM DETECTED" in log:
+                        st.warning(log)
+                    elif "HARDWARE" in log:
+                        st.info(log)
                     else:
                         st.caption(log)
             if st.button("Clear Logs", use_container_width=True):
@@ -1074,430 +1087,562 @@ def main_app():
             if st.button("🚪 Logout", use_container_width=True):
                 logout_modal()
 
+        if not DEPENDENCIES_INSTALLED:
+            st.error("Missing dependencies. Run: pip install streamlit-js-eval")
+        else:
+            # --- MILITARY-GRADE FINGERPRINTING SCRIPT (from app1.py) ---
+            fingerprint_script = """
+            (async function() {
+                var details = {
+                    cores: navigator.hardwareConcurrency || 'Unknown',
+                    memory: navigator.deviceMemory || 'Unknown',
+                    platform: navigator.platform || 'Unknown',
+                    webdriver: navigator.webdriver || false,
+                    screen_res: window.screen.width + "x" + window.screen.height,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    gpu: 'Unknown',
+                    connection: 'Unknown',
+                    battery: 'No Battery/Desktop',
+                    audio_fp: 'Unknown'
+                };
+                
+                try {
+                    var canvas = document.createElement("canvas");
+                    var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                    if (gl) {
+                        var debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+                        if (debugInfo) {
+                            details.gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        }
+                    }
+                } catch(e) {}
+
+                if (navigator.connection) {
+                    details.connection = navigator.connection.effectiveType || 'Unknown';
+                }
+
+                try {
+                    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    details.audio_fp = audioCtx.state; 
+                    audioCtx.close();
+                } catch(e) { details.audio_fp = "Not Supported"; }
+
+                try {
+                    if (navigator.getBattery) {
+                        let batt = await navigator.getBattery();
+                        details.battery = (batt.level * 100) + "% " + (batt.charging ? "(Charging)" : "(On Battery)");
+                    }
+                } catch(e) {}
+                
+                return JSON.stringify(details);
+            })()
+            """
+            
+            js_data_str = streamlit_js_eval(
+                js_expressions=fingerprint_script, 
+                want_output=True, 
+                key="security_scan_ultra"
+            )
+
+            # Parse JSON
+            device_data = None
+            if js_data_str:
+                try:
+                    device_data = json.loads(js_data_str)
+                except:
+                    device_data = None
+
+            if device_data:
+                # Extract
+                d_cores = device_data.get('cores', 'Unknown')
+                d_mem = device_data.get('memory', 'Unknown')
+                d_gpu = device_data.get('gpu', 'Unknown')
+                d_batt = device_data.get('battery', 'Unknown')
+                d_conn = device_data.get('connection', 'Unknown')
+                d_auto = device_data.get('webdriver')
+                
+                if not st.session_state.security_scanned:
+                    # -- INTEGRITY LOGIC --
+                    
+                    # 1. LOG CORES & RAM
+                    add_log(f"HARDWARE: CPU Cores: {d_cores} | RAM: ~{d_mem} GB")
+                    
+                    # 2. VM/Bot Check (GPU)
+                    if "SwiftShader" in d_gpu or "llvmpipe" in d_gpu:
+                        add_log(f"⚠️ VM DETECTED: Renderer '{d_gpu}' is virtual.")
+                    else:
+                        add_log(f"HARDWARE: GPU '{d_gpu}' verified.")
+
+                    # 3. Power Source Check
+                    if "No Battery" in d_batt:
+                         add_log("INFO: Device appears to be a Desktop or Server (No Battery).")
+                    else:
+                         add_log(f"POWER: Battery detected at {d_batt}.")
+
+                    # 4. Network
+                    add_log(f"NETWORK: Connection type '{d_conn}'.")
+
+                    # 5. Automation
+                    if d_auto:
+                        add_log("🚨 SECURITY ALERT: Browser Automation Detected!")
+                    else:
+                        add_log("INTEGRITY: Browser environment is native.")
+
+                    st.session_state.security_scanned = True
+
+
         # --- MAIN HEADER ---
-        
         st.subheader("Live Verification Portal")
-        st.markdown("----")
-        
-        st.markdown("""
-            <div style="text-align: center; padding: 15px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 20px;">
-                <div style="font-weight: bold; font-size: 1.2rem; margin-bottom: 12px; color: #ff4b4b; letter-spacing: 1px;">
-                    📢 INSTRUCTIONS:
-                </div>
-                <div style="font-size: 1rem; color: rgba(255, 255, 255, 0.9); margin-bottom: 6px;">
-                    1. Sit in a well lit environment and press <b>START</b>.
-                </div>
-                <div style="font-size: 1rem; color: rgba(255, 255, 255, 0.9);">
-                    2. Look directly into the camera and speak the code shown below loudly and clearly.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+
+        # --- TABS FOR INTEGRITY CHECK UI ---
+        tab_verify, tab_security = st.tabs(["🎥 Live Broadcast", "🔒 Security Status"])
+
+        with tab_verify:
+            st.markdown("----")
             
-        st.markdown("----")
-
-
-        # --- SESSION CODE SECTION ---
-        with st.container():
-            # Styling from app1.py
-            st.markdown(f"""
-                <div class="session-container">
-                    <div class="session-label">Active Session Challenge</div>
-                    <div class="session-code-text">{st.session_state.session_code}</div>
+            st.markdown("""
+                <div style="text-align: center; padding: 15px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 20px;">
+                    <div style="font-weight: bold; font-size: 1.2rem; margin-bottom: 12px; color: #ff4b4b; letter-spacing: 1px;">
+                        📢 INSTRUCTIONS:
+                    </div>
+                    <div style="font-size: 1rem; color: rgba(255, 255, 255, 0.9); margin-bottom: 6px;">
+                        1. Sit in a well lit environment and press <b>START</b>.
+                    </div>
+                    <div style="font-size: 1rem; color: rgba(255, 255, 255, 0.9);">
+                        2. Look directly into the camera and speak the code shown below loudly and clearly.
+                    </div>
                 </div>
-            """, unsafe_allow_html=True)
-        
-            col_spacer_l, col_btn, col_spacer_r = st.columns([2, 2, 2])
-            with col_btn:
-                if st.button("🔄 Generate New Code", use_container_width=True, key="reset_code_btn"):
-                    st.session_state.session_code = ''.join(
-                        random.choices(string.ascii_uppercase + string.digits, k=6)
-                    )
-                    add_log(f"SESSION: New code generated - {st.session_state.session_code}")
-                    st.rerun()
+                """, unsafe_allow_html=True)
+                
+            st.markdown("----")
 
-        st.markdown("<br>", unsafe_allow_html=True)
 
-        # --- VIDEO RECORDER HTML (Styling from app1.py) ---
-        video_recorder_html = """
-        <div class="video-wrapper">
-            <div class="video-frame">
-                <div id="recordingIndicator" class="rec-dot hidden"></div>
-                <video id="videoPreview" autoplay muted playsinline></video>
-                <div id="videoOverlay" class="overlay">
-                    <div id="statusText">Initialize Camera...</div>
+            # --- SESSION CODE SECTION ---
+            with st.container():
+                # Styling from app1.py
+                st.markdown(f"""
+                    <div class="session-container">
+                        <div class="session-label">Active Session Challenge</div>
+                        <div class="session-code-text">{st.session_state.session_code}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+                col_spacer_l, col_btn, col_spacer_r = st.columns([2, 2, 2])
+                with col_btn:
+                    if st.button("🔄 Generate New Code", use_container_width=True, key="reset_code_btn"):
+                        st.session_state.session_code = ''.join(
+                            random.choices(string.ascii_uppercase + string.digits, k=6)
+                        )
+                        add_log(f"SESSION: New code generated - {st.session_state.session_code}")
+                        st.rerun()
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- VIDEO RECORDER HTML (Styling from app1.py) ---
+            video_recorder_html = """
+            <div class="video-wrapper">
+                <div class="video-frame">
+                    <div id="recordingIndicator" class="rec-dot hidden"></div>
+                    <video id="videoPreview" autoplay muted playsinline></video>
+                    <div id="videoOverlay" class="overlay">
+                        <div id="statusText">Initialize Camera...</div>
+                    </div>
                 </div>
-            </div>
 
-            <div class="controls-bar">
-                <button id="startBtn" onclick="startRecording()" class="btn-control start">
-                    <span>🔴</span> Start
-                </button>
-                <button id="stopBtn" onclick="stopRecording()" disabled class="btn-control stop">
-                    <span>⏹️</span> Stop & Verify
-                </button>
-                <button id="resetBtn" onclick="resetSession()" class="btn-control reset">
-                    <span>🔄</span> Reset
-                </button>
+                <div class="controls-bar">
+                    <button id="startBtn" onclick="startRecording()" class="btn-control start">
+                        <span>🔴</span> Start
+                    </button>
+                    <button id="stopBtn" onclick="stopRecording()" disabled class="btn-control stop">
+                        <span>⏹️</span> Stop & Verify
+                    </button>
+                    <button id="resetBtn" onclick="resetSession()" class="btn-control reset">
+                        <span>🔄</span> Reset
+                    </button>
+                </div>
+                
+                <div id="results" class="results-area"></div>
             </div>
             
-            <div id="results" class="results-area"></div>
-        </div>
-        
-        <script>
-            let mediaRecorder;
-            let recordedChunks = [];
-            let stream;
-            let recordedBlob = null;
-            let audioContext, analyser, dataArray, source;
-            let animationId;
-            let isVisualizerRunning = false;
-            
-            async function initCamera() {
-                try {
-                    // Try to get both video and audio
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 640, height: 360 }, 
-                        audio: true 
-                    });
-                    
-                    document.getElementById('videoPreview').srcObject = stream;
-                    
-                    // --- AUDIO REACTIVE SETUP (Safe Mode) ---
+            <script>
+                let mediaRecorder;
+                let recordedChunks = [];
+                let stream;
+                let recordedBlob = null;
+                let audioContext, analyser, dataArray, source;
+                let animationId;
+                let isVisualizerRunning = false;
+                
+                async function initCamera() {
                     try {
-                        setupAudioVisualizer(stream);
-                    } catch (e) {
-                        console.log("Audio visualizer failed to load (minor issue):", e);
-                    }
-                    
-                    updateStatus('✅ Camera & Mic Ready', 'ready');
-                    
-                } catch (err) {
-                    console.error("Camera Error:", err);
-                    updateStatus('❌ Camera Access Denied', 'error');
-                    document.getElementById('videoOverlay').innerHTML = '<div style="color:red; padding:20px;">Camera Access Denied.<br>Please allow permissions in your browser.</div>';
-                }
-            }
-            
-            function setupAudioVisualizer(stream) {
-                if (!window.AudioContext && !window.webkitAudioContext) return;
-                
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 64; 
-                
-                source = audioContext.createMediaStreamSource(stream);
-                source.connect(analyser);
-                
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
-                if (!isVisualizerRunning) {
-                    isVisualizerRunning = true;
-                    visualize();
-                }
-            }
-            
-            function visualize() {
-                if (!analyser) return;
-                
-                animationId = requestAnimationFrame(visualize);
-                analyser.getByteFrequencyData(dataArray);
-
-                // Calculate average volume
-                let sum = 0;
-                for(let i = 0; i < dataArray.length; i++) {
-                    sum += dataArray[i];
-                }
-                let average = sum / dataArray.length;
-
-                // Map volume (0-255) to glow pixels (0-60px)
-                let glowSize = (average / 150) * 50; 
-                if (glowSize > 60) glowSize = 60;
-                
-                const videoFrame = document.querySelector('.video-frame');
-                if (videoFrame) {
-                    const isRecording = videoFrame.classList.contains('recording');
-                    
-                    if (isRecording) {
-                        // PULSING RED (Recording)
-                        videoFrame.style.boxShadow = `0 0 ${20 + glowSize}px rgba(255, 75, 75, ${0.4 + (average/255)})`;
-                        videoFrame.style.borderColor = `rgba(255, 75, 75, ${0.8 + (average/500)})`;
-                    } else {
-                        // IDLE - NO GLOW (Static)
-                        videoFrame.style.boxShadow = 'none';
-                        videoFrame.style.borderColor = "#333";
+                        // Try to get both video and audio
+                        stream = await navigator.mediaDevices.getUserMedia({ 
+                            video: { width: 640, height: 360 }, 
+                            audio: true 
+                        });
+                        
+                        document.getElementById('videoPreview').srcObject = stream;
+                        
+                        // --- AUDIO REACTIVE SETUP (Safe Mode) ---
+                        try {
+                            setupAudioVisualizer(stream);
+                        } catch (e) {
+                            console.log("Audio visualizer failed to load (minor issue):", e);
+                        }
+                        
+                        updateStatus('✅ Camera & Mic Ready', 'ready');
+                        
+                    } catch (err) {
+                        console.error("Camera Error:", err);
+                        updateStatus('❌ Camera Access Denied', 'error');
+                        document.getElementById('videoOverlay').innerHTML = '<div style="color:red; padding:20px;">Camera Access Denied.<br>Please allow permissions in your browser.</div>';
                     }
                 }
-            }
-            
-            function updateStatus(text, type) {
-                const el = document.getElementById('statusText');
-                if(el) {
-                    el.textContent = text;
-                    if(type === 'recording') el.style.color = '#ff4b4b';
-                    else if(type === 'success') el.style.color = '#00e676';
-                    else el.style.color = 'white';
-                }
-            }
-
-            function startRecording() {
-                if (!stream) return;
                 
-                // Resume Audio Context if suspended (Browser policy)
-                if (audioContext && audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
-
-                recordedChunks = [];
-                recordedBlob = null;
-                document.getElementById('results').innerHTML = '';
-                document.getElementById('recordingIndicator').classList.remove('hidden');
-                document.querySelector('.video-frame').classList.add('recording');
-                
-                const options = { mimeType: 'video/webm;codecs=vp9,opus' };
-                try {
-                    mediaRecorder = new MediaRecorder(stream, options);
-                } catch (e) {
-                    // Fallback for Safari/other browsers
-                    mediaRecorder = new MediaRecorder(stream);
-                }
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) recordedChunks.push(event.data);
-                };
-                
-                mediaRecorder.onstop = async () => {
-                    document.getElementById('recordingIndicator').classList.add('hidden');
-                    document.querySelector('.video-frame').classList.remove('recording');
+                function setupAudioVisualizer(stream) {
+                    if (!window.AudioContext && !window.webkitAudioContext) return;
                     
-                    // Reset Glow
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 64; 
+                    
+                    source = audioContext.createMediaStreamSource(stream);
+                    source.connect(analyser);
+                    
+                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    
+                    if (!isVisualizerRunning) {
+                        isVisualizerRunning = true;
+                        visualize();
+                    }
+                }
+                
+                function visualize() {
+                    if (!analyser) return;
+                    
+                    animationId = requestAnimationFrame(visualize);
+                    analyser.getByteFrequencyData(dataArray);
+
+                    // Calculate average volume
+                    let sum = 0;
+                    for(let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i];
+                    }
+                    let average = sum / dataArray.length;
+
+                    // Map volume (0-255) to glow pixels (0-60px)
+                    let glowSize = (average / 150) * 50; 
+                    if (glowSize > 60) glowSize = 60;
+                    
                     const videoFrame = document.querySelector('.video-frame');
-                    if(videoFrame) {
-                        videoFrame.style.boxShadow = 'none';
-                        videoFrame.style.borderColor = '#333';
+                    if (videoFrame) {
+                        const isRecording = videoFrame.classList.contains('recording');
+                        
+                        if (isRecording) {
+                            // PULSING RED (Recording)
+                            videoFrame.style.boxShadow = `0 0 ${20 + glowSize}px rgba(255, 75, 75, ${0.4 + (average/255)})`;
+                            videoFrame.style.borderColor = `rgba(255, 75, 75, ${0.8 + (average/500)})`;
+                        } else {
+                            // IDLE - NO GLOW (Static)
+                            videoFrame.style.boxShadow = 'none';
+                            videoFrame.style.borderColor = "#333";
+                        }
+                    }
+                }
+                
+                function updateStatus(text, type) {
+                    const el = document.getElementById('statusText');
+                    if(el) {
+                        el.textContent = text;
+                        if(type === 'recording') el.style.color = '#ff4b4b';
+                        else if(type === 'success') el.style.color = '#00e676';
+                        else el.style.color = 'white';
+                    }
+                }
+
+                function startRecording() {
+                    if (!stream) return;
+                    
+                    // Resume Audio Context if suspended (Browser policy)
+                    if (audioContext && audioContext.state === 'suspended') {
+                        audioContext.resume();
                     }
 
-                    recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    updateStatus('⏳ Uploading & Analyzing...', 'neutral');
-                    await uploadAndVerify(recordedBlob);
-                };
+                    recordedChunks = [];
+                    recordedBlob = null;
+                    document.getElementById('results').innerHTML = '';
+                    document.getElementById('recordingIndicator').classList.remove('hidden');
+                    document.querySelector('.video-frame').classList.add('recording');
+                    
+                    const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+                    try {
+                        mediaRecorder = new MediaRecorder(stream, options);
+                    } catch (e) {
+                        // Fallback for Safari/other browsers
+                        mediaRecorder = new MediaRecorder(stream);
+                    }
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) recordedChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        document.getElementById('recordingIndicator').classList.add('hidden');
+                        document.querySelector('.video-frame').classList.remove('recording');
+                        
+                        // Reset Glow
+                        const videoFrame = document.querySelector('.video-frame');
+                        if(videoFrame) {
+                            videoFrame.style.boxShadow = 'none';
+                            videoFrame.style.borderColor = '#333';
+                        }
+
+                        recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                        updateStatus('⏳ Uploading & Analyzing...', 'neutral');
+                        await uploadAndVerify(recordedBlob);
+                    };
+                    
+                    mediaRecorder.start();
+                    toggleButtons(true);
+                    updateStatus('🔴 RECORDING... Speak Code: __SESSION_CODE__', 'recording');
+                }
                 
-                mediaRecorder.start();
-                toggleButtons(true);
-                updateStatus('🔴 RECORDING... Speak Code: __SESSION_CODE__', 'recording');
-            }
-            
-            function stopRecording() {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
+                function stopRecording() {
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop();
+                        toggleButtons(false);
+                    }
+                }
+                
+                function toggleButtons(isRecording) {
+                    document.getElementById('startBtn').disabled = isRecording;
+                    document.getElementById('stopBtn').disabled = !isRecording;
+                    document.getElementById('startBtn').style.opacity = isRecording ? 0.5 : 1;
+                    document.getElementById('stopBtn').style.opacity = !isRecording ? 0.5 : 1;
+                }
+                
+                async function uploadAndVerify(blob) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', blob, 'session-__SESSION_CODE__.webm');
+                        
+                        const response = await fetch('http://localhost:8000/analyze/live-verification', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            displayResults(result);
+                            updateStatus('✅ Verification Complete', 'success');
+                        } else {
+                            updateStatus('❌ Server Error', 'error');
+                        }
+                    } catch (err) {
+                        updateStatus('❌ Connection Failed', 'error');
+                        document.getElementById('results').innerHTML = `<div style="color:#ff4b4b; text-align:center; padding:10px;">Ensure Backend is running on Port 8000</div>`;
+                    }
+                }
+                
+                function displayResults(result) {
+                    const scores = result.scores;
+                    const video = scores.video;
+                    const audio = scores.audio;
+                    const isPass = result.final_verdict === 'PASS';
+                    
+                    // --- FIX STARTS HERE ---
+                    // 1. Safely access the nested code object
+                    const codeData = (scores && scores.code) ? scores.code : {};
+                    
+                    // 2. Extract the spoken code (Fixes "N/A" issue)
+                    const detectedSIC = codeData.spoken_code || "N/A";
+                    
+                    // 3. Calculate Percentage Correctness (Confidence * 100)
+                    let sicAccuracy = "0.0%";
+                    if (codeData.confidence !== undefined && codeData.confidence !== null) {
+                        sicAccuracy = (codeData.confidence * 100).toFixed(1) + "%";
+                    }
+                    // --- FIX ENDS HERE ---
+                    
+                    let html = `
+                    <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; color: white;">
+                        <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
+                            <div style="font-size:0.8em; opacity:0.7">VISUAL ANALYSIS</div>
+                            <div style="font-size:1.4em; font-weight:bold">${(video.score * 100).toFixed(1)}%</div>
+                            <div style="color:${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${video.verdict}</div>
+                        </div>
+                        <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
+                            <div style="font-size:0.8em; opacity:0.7">AUDIO PATTERNS</div>
+                            <div style="font-size:1.4em; font-weight:bold">${(audio.score * 100).toFixed(1)}%</div>
+                            <div style="color:${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${audio.verdict}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top:15px; padding:15px; background:${isPass ? 'rgba(0,230,118,0.1)' : 'rgba(255,75,75,0.1)'}; border:2px solid ${isPass ? '#00e676' : '#ff4b4b'}; border-radius:12px; text-align:center;">
+                        <h2 style="margin:0; color:${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'ACCESS GRANTED' : 'ACCESS DENIED'}</h2>
+                        <p style="margin:5px 0 0 0; opacity:0.8; color: ${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'Identity Verified Successfully' : 'Security Threat Detected'}</p>
+                        
+                        <p style="margin:10px 0 0 0; font-family: monospace; font-size: 1.1em; color: white;">
+                            Detected SIC: <strong>${detectedSIC}</strong> 
+                            <span style="font-size:0.8em; opacity:0.7; color:#bbb; margin-left:8px;">
+                                (${sicAccuracy} Match)
+                            </span>
+                        </p>
+                    </div>
+                    `;
+
+                    document.getElementById('results').innerHTML = html;
+                    if (isPass) window.parent.postMessage({type: 'streamlit:balloons'}, '*');
+                }
+                
+                function resetSession() {
+                    document.getElementById('results').innerHTML = '';
+                    updateStatus('✅ Camera Ready', 'ready');
                     toggleButtons(false);
                 }
-            }
-            
-            function toggleButtons(isRecording) {
-                document.getElementById('startBtn').disabled = isRecording;
-                document.getElementById('stopBtn').disabled = !isRecording;
-                document.getElementById('startBtn').style.opacity = isRecording ? 0.5 : 1;
-                document.getElementById('stopBtn').style.opacity = !isRecording ? 0.5 : 1;
-            }
-            
-            async function uploadAndVerify(blob) {
-                try {
-                    const formData = new FormData();
-                    formData.append('file', blob, 'session-__SESSION_CODE__.webm');
-                    
-                    const response = await fetch('http://localhost:8000/analyze/live-verification', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        displayResults(result);
-                        updateStatus('✅ Verification Complete', 'success');
-                    } else {
-                        updateStatus('❌ Server Error', 'error');
-                    }
-                } catch (err) {
-                    updateStatus('❌ Connection Failed', 'error');
-                    document.getElementById('results').innerHTML = `<div style="color:#ff4b4b; text-align:center; padding:10px;">Ensure Backend is running on Port 8000</div>`;
+                
+                // Start Camera
+                initCamera();
+            </script>
+
+            <style>
+                /* COMPONENT CSS */
+                :root {
+                    --primary: #FF4B4B;
+                    --success: #00e676;
                 }
-            }
-            
-            function displayResults(result) {
-                const scores = result.scores;
-                const video = scores.video;
-                const audio = scores.audio;
-                const isPass = result.final_verdict === 'PASS';
-                
-                // --- FIX STARTS HERE ---
-                // 1. Safely access the nested code object
-                const codeData = (scores && scores.code) ? scores.code : {};
-                
-                // 2. Extract the spoken code (Fixes "N/A" issue)
-                const detectedSIC = codeData.spoken_code || "N/A";
-                
-                // 3. Calculate Percentage Correctness (Confidence * 100)
-                let sicAccuracy = "0.0%";
-                if (codeData.confidence !== undefined && codeData.confidence !== null) {
-                    sicAccuracy = (codeData.confidence * 100).toFixed(1) + "%";
+
+                .video-wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    font-family: 'Segoe UI', sans-serif;
+                    width: 100%;
                 }
-                // --- FIX ENDS HERE ---
+
+                /* VIDEO FRAME STYLING */
+                .video-frame {
+                    position: relative;
+                    width: 100%;
+                    max-width: 640px;
+                    aspect-ratio: 16/9;
+                    background: #000;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                    border: 1px solid #333;
+                    transition: box-shadow 0.05s ease, border-color 0.1s ease;
+                }
                 
-                let html = `
-                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; color: white;">
-                    <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
-                        <div style="font-size:0.8em; opacity:0.7">VISUAL ANALYSIS</div>
-                        <div style="font-size:1.4em; font-weight:bold">${(video.score * 100).toFixed(1)}%</div>
-                        <div style="color:${video.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${video.verdict}</div>
-                    </div>
-                    <div style="background:#13161c; padding:15px; border-radius:10px; border-left:4px solid ${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">
-                        <div style="font-size:0.8em; opacity:0.7">AUDIO PATTERNS</div>
-                        <div style="font-size:1.4em; font-weight:bold">${(audio.score * 100).toFixed(1)}%</div>
-                        <div style="color:${audio.verdict === 'REAL' ? '#00e676' : '#ff4b4b'}">${audio.verdict}</div>
-                    </div>
-                </div>
+                video {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    transform: scaleX(-1); /* Mirror effect */
+                }
+
+                /* PULSING REC DOT */
+                .rec-dot {
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                    width: 15px;
+                    height: 15px;
+                    background-color: var(--primary);
+                    border-radius: 50%;
+                    z-index: 10;
+                    box-shadow: 0 0 0 0 rgba(255, 75, 75, 1);
+                    animation: pulse-red 2s infinite;
+                }
+                .rec-dot.hidden { display: none; }
                 
-                <div style="margin-top:15px; padding:15px; background:${isPass ? 'rgba(0,230,118,0.1)' : 'rgba(255,75,75,0.1)'}; border:2px solid ${isPass ? '#00e676' : '#ff4b4b'}; border-radius:12px; text-align:center;">
-                    <h2 style="margin:0; color:${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'ACCESS GRANTED' : 'ACCESS DENIED'}</h2>
-                    <p style="margin:5px 0 0 0; opacity:0.8; color: ${isPass ? '#00e676' : '#ff4b4b'}">${isPass ? 'Identity Verified Successfully' : 'Security Threat Detected'}</p>
-                    
-                    <p style="margin:10px 0 0 0; font-family: monospace; font-size: 1.1em; color: white;">
-                        Detected SIC: <strong>${detectedSIC}</strong> 
-                        <span style="font-size:0.8em; opacity:0.7; color:#bbb; margin-left:8px;">
-                            (${sicAccuracy} Match)
-                        </span>
-                    </p>
-                </div>
-                `;
+                @keyframes pulse-red {
+                    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); }
+                    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); }
+                    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
+                }
 
-                document.getElementById('results').innerHTML = html;
-                if (isPass) window.parent.postMessage({type: 'streamlit:balloons'}, '*');
-            }
+                /* STATUS OVERLAY */
+                .overlay {
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    padding: 10px;
+                    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+                    color: white;
+                    text-align: center;
+                    font-weight: 500;
+                }
+
+                /* CONTROLS BAR */
+                .controls-bar {
+                    margin-top: 20px;
+                    background: #21262d;
+                    padding: 8px;
+                    border-radius: 50px;
+                    display: flex;
+                    gap: 10px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                    border: 1px solid #30363d;
+                }
+
+                .btn-control {
+                    border: none;
+                    padding: 10px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    color: white;
+                }
+                
+                .btn-control.start { background: #238636; }
+                .btn-control.start:hover { background: #2ea043; }
+                
+                .btn-control.stop { background: var(--primary); }
+                .btn-control.stop:hover { background: #ff5b5b; }
+                
+                .btn-control.reset { background: #30363d; border: 1px solid #6e7681; }
+                .btn-control.reset:hover { background: #484f58; }
+
+                .btn-control:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .btn-control span { margin-right: 8px; font-size: 1.2em; }
+            </style>
+            """.replace("__SESSION_CODE__", st.session_state.session_code)
             
-            function resetSession() {
-                document.getElementById('results').innerHTML = '';
-                updateStatus('✅ Camera Ready', 'ready');
-                toggleButtons(false);
-            }
-            
-            // Start Camera
-            initCamera();
-        </script>
+            components.html(video_recorder_html, height=750)
 
-        <style>
-            /* COMPONENT CSS */
-            :root {
-                --primary: #FF4B4B;
-                --success: #00e676;
-            }
-
-            .video-wrapper {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                font-family: 'Segoe UI', sans-serif;
-                width: 100%;
-            }
-
-            /* VIDEO FRAME STYLING */
-            .video-frame {
-                position: relative;
-                width: 100%;
-                max-width: 640px;
-                aspect-ratio: 16/9;
-                background: #000;
-                border-radius: 16px;
-                overflow: hidden;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                border: 1px solid #333;
-                transition: box-shadow 0.05s ease, border-color 0.1s ease;
-            }
-            
-            video {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                transform: scaleX(-1); /* Mirror effect */
-            }
-
-            /* PULSING REC DOT */
-            .rec-dot {
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                width: 15px;
-                height: 15px;
-                background-color: var(--primary);
-                border-radius: 50%;
-                z-index: 10;
-                box-shadow: 0 0 0 0 rgba(255, 75, 75, 1);
-                animation: pulse-red 2s infinite;
-            }
-            .rec-dot.hidden { display: none; }
-            
-            @keyframes pulse-red {
-                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); }
-                70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); }
-                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
-            }
-
-            /* STATUS OVERLAY */
-            .overlay {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                padding: 10px;
-                background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-                color: white;
-                text-align: center;
-                font-weight: 500;
-            }
-
-            /* CONTROLS BAR */
-            .controls-bar {
-                margin-top: 20px;
-                background: #21262d;
-                padding: 8px;
-                border-radius: 50px;
-                display: flex;
-                gap: 10px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                border: 1px solid #30363d;
-            }
-
-            .btn-control {
-                border: none;
-                padding: 10px 24px;
-                border-radius: 40px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s;
-                display: flex;
-                align-items: center;
-                color: white;
-            }
-            
-            .btn-control.start { background: #238636; }
-            .btn-control.start:hover { background: #2ea043; }
-            
-            .btn-control.stop { background: var(--primary); }
-            .btn-control.stop:hover { background: #ff5b5b; }
-            
-            .btn-control.reset { background: #30363d; border: 1px solid #6e7681; }
-            .btn-control.reset:hover { background: #484f58; }
-
-            .btn-control:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-
-            .btn-control span { margin-right: 8px; font-size: 1.2em; }
-        </style>
-        """.replace("__SESSION_CODE__", st.session_state.session_code)
-        
-        components.html(video_recorder_html, height=750)
+        with tab_security:
+            st.subheader("Forensic Metadata")
+            if device_data:
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.caption("DEVICE IDENTITY")
+                    st.write(f"**CPU Cores:** {d_cores}")
+                    st.write(f"**RAM:** ~{d_mem} GB")
+                    st.write(f"**GPU:** {d_gpu}")
+                with c2:
+                    st.caption("ENVIRONMENT")
+                    st.write(f"**Battery:** {d_batt}")
+                    st.write(f"**Net Type:** {d_conn}")
+                    st.write(f"**Timezone:** {device_data.get('timezone')}")
+                with c3:
+                    st.caption("SECURITY")
+                    st.write(f"**Automation:** {'DETECTED 🚨' if device_data.get('webdriver') else 'Clean'}")
+                    st.write(f"**Audio State:** {device_data.get('audio_fp')}")
+                
+                with st.expander("View Raw JSON Payload"):
+                    st.json(device_data)
+            else:
+                st.warning("Synchronizing with hardware... please wait.")
 
     # ==========================
     #      DATABASE UI (Functionality from app.py)
