@@ -1,35 +1,29 @@
 import cv2
 import numpy as np
 from typing import List
-
+from app.config import settings
 
 def detect_faces(frames: List[np.ndarray]) -> List[np.ndarray]:
     """
-    Detects faces in video frames using Haar Cascade.
-    
-    Args:
-        frames: List of video frames (RGB format, HxWxC)
-    
-    Returns:
-        List of detected face crops
+    Detects faces and adds padding to include hair/ears.
     """
     
+    # PARAMETER: How much to expand the tight face box
+    # 0.0 = Tight crop (chin to eyebrows)
+    # 0.5 = 50% expansion (includes hair, ears, neck)
+    PADDING_FACTOR = 0.5 
+    
     if len(frames) == 0:
-        print("[FACE_DETECT] No frames provided")
         return []
     
-    print(f"[FACE_DETECT] Processing {len(frames)} frames")
-    
-    # Load Haar Cascade classifier
+    # Load Haar Cascade
     try:
         face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
-        
         if face_cascade.empty():
             print("[FACE_DETECT] Failed to load Haar Cascade")
             return []
-            
     except Exception as e:
         print(f"[FACE_DETECT] Error loading cascade: {e}")
         return []
@@ -38,74 +32,52 @@ def detect_faces(frames: List[np.ndarray]) -> List[np.ndarray]:
     
     for idx, frame in enumerate(frames):
         try:
-            # Validate frame
-            if frame is None or frame.size == 0:
-                print(f"[FACE_DETECT] Frame {idx} is empty, skipping")
-                continue
-            
-            # Check frame dimensions
-            if len(frame.shape) != 3:
-                print(f"[FACE_DETECT] Frame {idx} has invalid shape: {frame.shape}")
-                continue
-            
             height, width = frame.shape[:2]
-            if height < 50 or width < 50:
-                print(f"[FACE_DETECT] Frame {idx} too small: {width}x{height}")
-                continue
+            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
             
-            # Convert to grayscale for detection
-            if frame.shape[2] == 3:
-                gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            else:
-                gray = frame
-            
-            # Ensure 8-bit unsigned integer format
-            if gray.dtype != np.uint8:
-                gray = (gray * 255).astype(np.uint8) if gray.max() <= 1.0 else gray.astype(np.uint8)
-            
-            # Detect faces with validated parameters
             faces = face_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.1,  # Must be > 1
+                scaleFactor=1.1,
                 minNeighbors=5,
                 minSize=(30, 30),
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
             
-            # Extract face crops
             for (x, y, w, h) in faces:
-                # Validate coordinates
-                if x < 0 or y < 0 or w <= 0 or h <= 0:
-                    continue
+                # --- PADDING LOGIC START ---
+                # Calculate padding amount based on face size
+                pad_w = int(w * PADDING_FACTOR)
+                pad_h = int(h * PADDING_FACTOR)
                 
-                if x + w > width or y + h > height:
-                    continue
-                
-                # Extract and resize face
-                face_crop = frame[y:y+h, x:x+w]
+                # Apply padding to coordinates (center the expansion)
+                x_new = max(0, x - pad_w // 2)
+                y_new = max(0, y - pad_h // 2)
+                w_new = min(width - x_new, w + pad_w)
+                h_new = min(height - y_new, h + pad_h)
+                # --- PADDING LOGIC END ---
+
+                # Extract padded face
+                face_crop = frame[y_new:y_new+h_new, x_new:x_new+w_new]
                 
                 if face_crop.size == 0:
                     continue
                 
-                # Resize to model input size (224x224)
+                # Resize to Model Input Size (299x299 for Xception)
                 try:
-                    face_resized = cv2.resize(face_crop, (224, 224))
-                    detected_faces.append(face_resized)
+                    face_resized = cv2.resize(
+                        face_crop, 
+                        (settings.FACE_IMAGE_SIZE, settings.FACE_IMAGE_SIZE),
+                        interpolation=cv2.INTER_AREA
+                    )
+                    
+                    # Normalization [0, 1]
+                    face_normalized = face_resized.astype(np.float32) / 255.0
+                    detected_faces.append(face_normalized)
                 except Exception as e:
-                    print(f"[FACE_DETECT] Error resizing face: {e}")
                     continue
-            
-            if len(faces) > 0:
-                print(f"[FACE_DETECT] Frame {idx}: Found {len(faces)} face(s)")
-        
-        except Exception as e:
-            print(f"[FACE_DETECT] Error processing frame {idx}: {e}")
+                
+        except Exception:
             continue
     
     print(f"[FACE_DETECT] Total faces detected: {len(detected_faces)}")
-    
-    # If no faces detected, return empty list (don't crash)
-    if len(detected_faces) == 0:
-        print("[FACE_DETECT] WARNING: No faces detected in any frame")
-    
     return detected_faces

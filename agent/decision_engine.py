@@ -87,7 +87,6 @@ class DecisionEngine:
         return decision
 
 
-# Functional wrapper with media_type parameter
 def make_decision(aggregated_score: float, media_type: str = "video") -> Dict:
     """
     Makes a decision for video or audio analysis.

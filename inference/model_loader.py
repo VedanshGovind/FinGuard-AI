@@ -31,7 +31,7 @@ class ModelLoader:
 
     def _load_video_pipeline(self):
         """Loads Xception video model."""
-        model_path = Path(settings.DEEPFAKE_MODEL_PATH) # e.g., models/deepfake_model.pth
+        model_path = Path(settings.DEEPFAKE_MODEL_PATH) 
         
         if model_path.exists():
             try:
@@ -48,8 +48,7 @@ class ModelLoader:
         audio_path = Path("models/audio_model.pth") 
         
         # Initialize Architecture (MobileNetV2)
-        # We assume the model was trained on spectrograms (1 channel or 3 channels)
-        # Here we load a standard MobileNetV2 and modify the classifier for binary (Real vs Fake)
+     
         self.audio_model = models.mobilenet_v2(weights=None)
         
         # Adjust first layer if your input is 1-channel spectrogram, otherwise keep standard

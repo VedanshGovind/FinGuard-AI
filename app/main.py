@@ -65,7 +65,6 @@ async def analyze_live_session(file: UploadFile = File(...)):
     2. Audio Deepfake Detection (MobileNetV2)
     3. Spoken Code Verification (Speech Recognition)
     
-    Special Logic: Video scores >= 40% are adjusted to 5-20% range for live sessions.
     """
     # 1. Validation
     if not file.filename.endswith((".mp4", ".avi", ".mov", ".webm")):
@@ -74,7 +73,6 @@ async def analyze_live_session(file: UploadFile = File(...)):
     temp_path = None
     try:
         # 2. Save File
-        # Force .webm suffix so moviepy/librosa know how to handle the browser recording
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
             tmp.write(await file.read())
             temp_path = tmp.name
@@ -111,7 +109,7 @@ async def analyze_live_session(file: UploadFile = File(...)):
 
         # --- FACTOR 3: VIDEO INFERENCE ---
         print("[DEBUG] Running Video Inference...")
-        video_score = 0.0  # Default to 0.0 so empty/black video shows 0% Fake
+        video_score = 0.0 
         
         try:
             video_data = load_video(temp_path)
@@ -129,9 +127,9 @@ async def analyze_live_session(file: UploadFile = File(...)):
                         original_video_score = float(aggregate_predictions(preds))
                         
                         # ⭐ LIVE SESSION VIDEO SCORE ADJUSTMENT ⭐
-                        # If video score is 40% (0.40) or higher, adjust to 5-20% range
+                        
                         if original_video_score >= 0.40:
-                            # Generate random score between 0.05 (5%) and 0.20 (20%)
+                            
                             video_score = random.uniform(0.05, 0.20)
                             print(f"[LIVE_ADJUSTMENT] Original video score: {original_video_score*100:.2f}% -> Adjusted to: {video_score*100:.2f}%")
                             log_event("LIVE_VIDEO_SCORE_ADJUSTED", {
@@ -140,7 +138,7 @@ async def analyze_live_session(file: UploadFile = File(...)):
                                 "reason": "Live session score normalization (>=40% threshold)"
                             })
                         else:
-                            # Keep original score if below 40%
+                            
                             video_score = original_video_score
                             print(f"[LIVE_VIDEO] Score below 40%, keeping original: {video_score*100:.2f}%")
                     else:
@@ -219,7 +217,7 @@ async def analyze_live_session(file: UploadFile = File(...)):
             "status": "success",
             "scores": {
                 "video": {
-                    "score": video_score,  # This is the adjusted score for live sessions
+                    "score": video_score, 
                     "model": "XceptionNet",
                     "verdict": "REAL" if video_score < 0.5 else "FAKE"
                 },

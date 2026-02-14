@@ -38,32 +38,29 @@ class Settings:
     # =========================
     # Audio Configuration (Heuristic-based)
     # =========================
-    # Audio detection now uses signal processing (no model needed)
     SAMPLE_RATE = 16000
-    
-    # Heuristic detection thresholds (can be tuned)
-    AUDIO_DEEPFAKE_THRESHOLD_HIGH = 0.70  # >70% = likely fake
-    AUDIO_DEEPFAKE_THRESHOLD_LOW = 0.30   # <30% = likely real
+    AUDIO_DEEPFAKE_THRESHOLD_HIGH = 0.70
+    AUDIO_DEEPFAKE_THRESHOLD_LOW = 0.30
 
     # =========================
     # Device Configuration
     # =========================
-    DEVICE = "cpu"  # auto-detection can be added later
+    DEVICE = "cpu"
     USE_FP16 = False
 
     # =========================
     # Inference Thresholds (Video)
     # =========================
-    # These directly affect the agent's decision logic
     DEEPFAKE_THRESHOLD_HIGH = 0.75
     DEEPFAKE_THRESHOLD_LOW = 0.40
 
     # =========================
     # Preprocessing
     # =========================
-    FRAME_SAMPLE_RATE = 10          # frames per second
-    MAX_FRAMES = 150               # hard cap for edge safety
-    FACE_IMAGE_SIZE = 224
+    FRAME_SAMPLE_RATE = 10
+    MAX_FRAMES = 150
+    # FIX: Correct input size for Xception
+    FACE_IMAGE_SIZE = 299
 
     # =========================
     # Security

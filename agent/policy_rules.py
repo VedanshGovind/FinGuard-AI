@@ -28,30 +28,25 @@ def apply_policy_rules(verdict: str, confidence: float, risk_level: str) -> Dict
     policy_flags = []
 
     # Rule 1: Extreme Confidence Override
-    # Even if thresholds suggest REAL, if the score is near-zero or near-one,
-    # we lock the risk level to minimize false negatives/positives.
+    
     if confidence > 0.98:
         final_risk_level = "CRITICAL"
         policy_flags.append("EXTREME_CONFIDENCE_LOCK")
     
     # Rule 2: The "Ambiguity Zone" Policy
-    # If the score falls in the middle range defined in config, 
-    # we force a human-in-the-loop (HITL) flag.
+    
     if settings.DEEPFAKE_THRESHOLD_LOW < confidence < settings.DEEPFAKE_THRESHOLD_HIGH:
         final_verdict = "UNCERTAIN"
         final_risk_level = "MEDIUM"#use nahihua hai kahi pe 
         policy_flags.append("REQUIRES_HUMAN_REVIEW")
 
     # Rule 3: Edge Case Safety
-    # If the system is in EDGE_OFFLINE mode, we escalate 'UNCERTAIN' 
-    # to 'HIGH' risk to be safe, assuming no cloud-based secondary check is available.
+   
     if settings.RUNTIME_MODE == "EDGE_OFFLINE" and final_verdict == "UNCERTAIN":
         final_risk_level = "HIGH"
         policy_flags.append("OFFLINE_PRECAUTIONARY_ESCALATION")
 
     # Rule 4: Integrity Check Integration
-    # (Assumption: If integrity check failed in main.py, this would be caught 
-    # earlier, but we check for security flags here if passed via kwargs)
     
     return {
         "verdict": final_verdict,

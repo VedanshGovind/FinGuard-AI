@@ -7,44 +7,33 @@ from app_logging.event_logger import log_event
 
 def normalize_frames(frames):
     """
-    Normalizes raw video frames for downstream face detection and ML inference.
-
-    Steps:
-    - Resize frames to model-compatible size
-    - Convert BGR → RGB
-    - Normalize pixel values to [0, 1]
+    Prepares raw video frames for face detection.
+    
+    Correction:
+    - We do NOT resize to FACE_IMAGE_SIZE here (that would make frames too small for detection).
+    - We do NOT convert to float here (OpenCV detector needs uint8).
+    - We only convert BGR -> RGB.
 
     Args:
-        frames (list[np.ndarray]): Raw sampled frames
+        frames (list[np.ndarray]): Raw sampled frames (BGR)
 
     Returns:
-        list[np.ndarray]: Normalized frames
+        list[np.ndarray]: RGB frames (uint8)
     """
 
-    normalized_frames = []
+    processed_frames = []
 
     for frame in frames:
-        # Resize frame
-        resized = cv2.resize(
-            frame,
-            (settings.FACE_IMAGE_SIZE, settings.FACE_IMAGE_SIZE),
-            interpolation=cv2.INTER_LINEAR
-        )
-
         # Convert BGR (OpenCV default) → RGB
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-
-        # Normalize pixel values
-        normalized = rgb.astype(np.float32) / 255.0
-
-        normalized_frames.append(normalized)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        processed_frames.append(rgb)
 
     log_event(
-        "FRAMES_NORMALIZED",
+        "FRAMES_PREPARED",
         {
-            "frame_count": len(normalized_frames),
-            "image_size": settings.FACE_IMAGE_SIZE
+            "frame_count": len(processed_frames),
+            "note": "Kept original resolution for detection"
         }
     )
 
-    return normalized_frames
+    return processed_frames

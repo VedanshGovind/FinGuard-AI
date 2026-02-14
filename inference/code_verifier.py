@@ -77,7 +77,7 @@ def extract_code_from_audio(video_path, expected_code):
                     import librosa
                     import soundfile as sf
                     
-                    # FIX: Renamed variable to 'sample_rate' to avoid conflict with 'sr' module
+
                     y, sample_rate = librosa.load(video_path, sr=16000, mono=True, duration=10)
                     
                     if len(y) < 1000: raise Exception("No audio samples")
@@ -106,9 +106,6 @@ def extract_code_from_audio(video_path, expected_code):
         try:
             with sr.AudioFile(temp_wav) as source:
                 print("[CODE_VERIFY] Reading audio for recognition...")
-                # --- CRITICAL FIX: Removed adjust_for_ambient_noise ---
-                # This was eating the first 0.5s of your speech (the start of the code)
-                # recognizer.adjust_for_ambient_noise(source, duration=0.5) 
                 
                 audio_data = recognizer.record(source)
                 
@@ -130,7 +127,7 @@ def extract_code_from_audio(video_path, expected_code):
 
         # --- PHASE 3: MATCHING LOGIC (3 out of 6 chars = PASS) ---
         
-        # 1. Clean Inputs (Remove spaces, dashes, symbols)
+ 
         spoken_code = re.sub(r'[^A-Z0-9]', '', spoken_text)
         expected_clean = re.sub(r'[^A-Z0-9]', '', expected_code.upper())
         
@@ -143,7 +140,7 @@ def extract_code_from_audio(video_path, expected_code):
             code_match = True
             print("[CODE_VERIFY] EXACT MATCH (100%)")
         else:
-            # Fuzzy Match
+            
             def levenshtein(s1, s2):
                 if len(s1) < len(s2): return levenshtein(s2, s1)
                 if len(s2) == 0: return len(s1)
